@@ -29,7 +29,7 @@ services:
       - 9696:9696 # prowlarr
       - 7878:7878 # radarr
       - 8989:8989 # sonarr
-      - 9000:8080 # sabnzbd
+      - 8080:8080 # sabnzbd
       - 8282:8282 # configarr
     healthcheck:
       test: ["CMD-SHELL", "ping -c 1 1.1.1.1 || exit 1"]
