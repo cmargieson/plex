@@ -1,0 +1,152 @@
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Melbourne
+      - VERSION=docker
+    volumes:
+      - ${HOME}/Documents/plex/appdata/plex:/config
+      - ${HOME}/Documents/plex/data:/data 
+    restart: unless-stopped
+
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    hostname: gluetun
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=privado
+    env_file:
+      - .secrets/gluetun.env
+    ports:
+      - 6767:6767 # bazarr
+      - 8686:8686 # lidarr
+      - 9696:9696 # prowlarr
+      - 7878:7878 # radarr
+      - 8989:8989 # sonarr
+      - 22028:8080 # sabnzbd
+      - 8282:8282 # configarr
+    healthcheck:
+      test: ["CMD-SHELL", "ping -c 1 1.1.1.1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    
+  configarr:
+    image: ghcr.io/raydak-labs/configarr:latest
+    container_name: configarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Melbourne
+    volumes:
+      - ${HOME}/Documents/plex/appdata/configarr/config:/app/config
+      - ${HOME}/Documents/plex/appdata/configarr/repos:/app/repos
+      - ${HOME}/Documents/plex/appdata/configarr/cfs:/app/cfs
+      - ${HOME}/Documents/plex/appdata/configarr/templates:/app/templates
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Melbourne
+    volumes:
+      - ${HOME}/Documents/plex/appdata/bazarr:/config
+      - ${HOME}/Documents/plex/data:/data 
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Melbourne
+    volumes:
+      - ${HOME}/Documents/plex/appdata/lidarr:/config
+      - ${HOME}/Documents/plex/data:/data 
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Melbourne
+    volumes:
+      - ${HOME}/Documents/plex/appdata/prowlarr:/config
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Melbourne
+    volumes:
+      - ${HOME}/Documents/plex/appdata/radarr:/config
+      - ${HOME}/Documents/plex/data:/data 
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Melbourne
+    volumes:
+      - ${HOME}/Documents/plex/appdata/sonarr:/config
+      - ${HOME}/Documents/plex/data:/data 
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Australia/Melbourne
+    volumes:
+      - ${HOME}/Documents/plex/appdata/sabnzbd:/config
+      - ${HOME}/Documents/plex/data:/data 
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
