@@ -16,10 +16,13 @@ services:
   mediasage:
     image: ghcr.io/ecwilsonaz/mediasage:latest
     container_name: mediasage
+    user: "1000:1000"
     network_mode: host
     env_file:
       - .secrets/mediasage.env
     environment:
+      - PUID=1000
+      - PGID=1000
       - TZ=Australia/Melbourne
       - PLEX_URL=http://localhost:32400
     volumes:
