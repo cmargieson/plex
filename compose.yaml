@@ -13,6 +13,19 @@ services:
       - ${HOME}/Documents/plex/data:/data 
     restart: unless-stopped
 
+  mediasage:
+    image: ghcr.io/ecwilsonaz/mediasage:latest
+    container_name: mediasage
+    network_mode: host
+    env_file:
+      - .secrets/mediasage.env
+    environment:
+      - TZ=Australia/Melbourne
+      - PLEX_URL=http://localhost:32400
+    volumes:
+      - ${HOME}/Documents/plex/appdata/mediasage:/app/data
+    restart: unless-stopped
+
   gluetun:
     image: qmcgaw/gluetun
     container_name: gluetun
