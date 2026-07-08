@@ -21,14 +21,19 @@
 # we only use them as named snippets to reuse below.
 # ---------------------------------------------------------------------------
 
+# Timezone shared by every service that cares about local time
+# (logs, schedules, etc.). Change it in one place only.
+x-timezone: &timezone
+  TZ: Australia/Melbourne
+
 # Shared environment variables for LinuxServer.io images.
 # PUID / PGID = which Linux user/group owns files created in volumes
 #   (should match the user on your host who owns the media folders).
-# TZ = timezone used for logs and schedules.
+# Includes *timezone so those images also get TZ.
 x-common-env: &common-env
+  <<: *timezone
   PUID: "1000"
   PGID: "1000"
-  TZ: Australia/Melbourne
 
 # Shared networking for apps that must use the VPN.
 # network_mode: service:gluetun means "share Gluetun's network stack":
@@ -86,7 +91,8 @@ services:
     env_file:
       - .secrets/mediasage.env
     environment:
-      TZ: Australia/Melbourne
+      # Merge shared TZ only — not *common-env, which also adds unused PUID/PGID.
+      <<: *timezone
       # With host networking, "localhost" is the host itself — where Plex listens.
       PLEX_URL: http://localhost:32400
     volumes:
