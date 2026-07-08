@@ -1,40 +1,56 @@
+# Shared env for LinuxServer-style services (PUID/PGID + timezone).
+x-common-env: &common-env
+  PUID: "1000"
+  PGID: "1000"
+  TZ: Australia/Melbourne
+
+# *arr / downloaders share Gluetun's network namespace (VPN + published ports).
+x-behind-gluetun: &behind-gluetun
+  network_mode: service:gluetun
+  depends_on:
+    gluetun:
+      condition: service_healthy
+  restart: unless-stopped
+
 services:
+  # --- Media ---
   plex:
-    image: lscr.io/linuxserver/plex:latest
+    image: lscr.io/linuxserver/plex:1.43.2
     container_name: plex
     network_mode: host
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Melbourne
-      - VERSION=docker
+      <<: *common-env
+      VERSION: docker
     volumes:
-      - ${HOME}/Documents/plex/appdata/plex:/config
-      - ${HOME}/Documents/plex/data:/data 
+      - ${PLEX_ROOT}/appdata/plex:/config
+      - ${PLEX_ROOT}/data:/data
     restart: unless-stopped
 
+  # MediaSage uses user: instead of PUID/PGID (image expectation).
   mediasage:
-    image: ghcr.io/ecwilsonaz/mediasage:latest
+    image: ghcr.io/ecwilsonaz/mediasage:v0.2.0
     container_name: mediasage
     user: "1000:1000"
     network_mode: host
     env_file:
       - .secrets/mediasage.env
     environment:
-      - TZ=Australia/Melbourne
-      - PLEX_URL=http://localhost:32400
+      TZ: Australia/Melbourne
+      PLEX_URL: http://localhost:32400
     volumes:
-      - ${HOME}/Documents/plex/appdata/mediasage:/app/data
+      - ${PLEX_ROOT}/appdata/mediasage:/app/data
     restart: unless-stopped
 
+  # --- VPN ---
+  # All acquisition UIs are published here (shared network_mode: service:gluetun).
   gluetun:
-    image: qmcgaw/gluetun
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun
     hostname: gluetun
     cap_add:
       - NET_ADMIN
     environment:
-      - VPN_SERVICE_PROVIDER=privado
+      VPN_SERVICE_PROVIDER: privado
     env_file:
       - .secrets/gluetun.env
     ports:
@@ -51,116 +67,75 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
-    
+
+  # --- Acquisition ---
   configarr:
-    image: ghcr.io/raydak-labs/configarr:latest
+    <<: *behind-gluetun
+    image: ghcr.io/raydak-labs/configarr:1.29.1
     container_name: configarr
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Melbourne
+      <<: *common-env
     volumes:
-      - ${HOME}/Documents/plex/appdata/configarr/config:/app/config
-      - ${HOME}/Documents/plex/appdata/configarr/repos:/app/repos
-      - ${HOME}/Documents/plex/appdata/configarr/cfs:/app/cfs
-      - ${HOME}/Documents/plex/appdata/configarr/templates:/app/templates
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+      - ${PLEX_ROOT}/appdata/configarr/config:/app/config
+      - ${PLEX_ROOT}/appdata/configarr/repos:/app/repos
+      - ${PLEX_ROOT}/appdata/configarr/cfs:/app/cfs
+      - ${PLEX_ROOT}/appdata/configarr/templates:/app/templates
 
   bazarr:
-    image: lscr.io/linuxserver/bazarr:latest
+    <<: *behind-gluetun
+    image: lscr.io/linuxserver/bazarr:1.6.0
     container_name: bazarr
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Melbourne
+      <<: *common-env
     volumes:
-      - ${HOME}/Documents/plex/appdata/bazarr:/config
-      - ${HOME}/Documents/plex/data:/data 
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+      - ${PLEX_ROOT}/appdata/bazarr:/config
+      - ${PLEX_ROOT}/data:/data
 
   lidarr:
-    image: lscr.io/linuxserver/lidarr:latest
+    <<: *behind-gluetun
+    image: lscr.io/linuxserver/lidarr:3.1.0
     container_name: lidarr
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Melbourne
+      <<: *common-env
     volumes:
-      - ${HOME}/Documents/plex/appdata/lidarr:/config
-      - ${HOME}/Documents/plex/data:/data 
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+      - ${PLEX_ROOT}/appdata/lidarr:/config
+      - ${PLEX_ROOT}/data:/data
 
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr:latest
+    <<: *behind-gluetun
+    image: lscr.io/linuxserver/prowlarr:2.4.0
     container_name: prowlarr
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Melbourne
+      <<: *common-env
     volumes:
-      - ${HOME}/Documents/plex/appdata/prowlarr:/config
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+      - ${PLEX_ROOT}/appdata/prowlarr:/config
 
   radarr:
-    image: lscr.io/linuxserver/radarr:latest
+    <<: *behind-gluetun
+    image: lscr.io/linuxserver/radarr:6.2.1
     container_name: radarr
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Melbourne
+      <<: *common-env
     volumes:
-      - ${HOME}/Documents/plex/appdata/radarr:/config
-      - ${HOME}/Documents/plex/data:/data 
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+      - ${PLEX_ROOT}/appdata/radarr:/config
+      - ${PLEX_ROOT}/data:/data
 
   sonarr:
-    image: lscr.io/linuxserver/sonarr:latest
+    <<: *behind-gluetun
+    image: lscr.io/linuxserver/sonarr:4.0.19
     container_name: sonarr
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Melbourne
+      <<: *common-env
     volumes:
-      - ${HOME}/Documents/plex/appdata/sonarr:/config
-      - ${HOME}/Documents/plex/data:/data 
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+      - ${PLEX_ROOT}/appdata/sonarr:/config
+      - ${PLEX_ROOT}/data:/data
 
   sabnzbd:
-    image: lscr.io/linuxserver/sabnzbd:latest
+    <<: *behind-gluetun
+    image: lscr.io/linuxserver/sabnzbd:5.0.4
     container_name: sabnzbd
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Australia/Melbourne
+      <<: *common-env
     volumes:
-      - ${HOME}/Documents/plex/appdata/sabnzbd:/config
-      - ${HOME}/Documents/plex/data:/data 
-    network_mode: "service:gluetun"
-    depends_on:
-      gluetun:
-        condition: service_healthy
-    restart: unless-stopped
+      - ${PLEX_ROOT}/appdata/sabnzbd:/config
+      - ${PLEX_ROOT}/data:/data
