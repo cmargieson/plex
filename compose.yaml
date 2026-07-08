@@ -28,7 +28,7 @@ services:
 
   # MediaSage uses user: instead of PUID/PGID (image expectation).
   mediasage:
-    image: ghcr.io/ecwilsonaz/mediasage:v0.2.0
+    image: ghcr.io/ecwilsonaz/mediasage:0.2.0
     container_name: mediasage
     user: "1000:1000"
     network_mode: host
@@ -49,6 +49,8 @@ services:
     hostname: gluetun
     cap_add:
       - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
     environment:
       VPN_SERVICE_PROVIDER: privado
     env_file:
@@ -61,11 +63,13 @@ services:
       - 8989:8989 # sonarr
       - 8080:8080 # sabnzbd
       - 8282:8282 # configarr
+    # start_period must cover VPN server failover (first endpoint can be dead for ~60s+).
     healthcheck:
       test: ["CMD-SHELL", "ping -c 1 1.1.1.1 || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 6
+      start_period: 120s
     restart: unless-stopped
 
   # --- Acquisition ---
