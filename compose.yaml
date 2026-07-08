@@ -1,10 +1,41 @@
-# Shared env for LinuxServer-style services (PUID/PGID + timezone).
+# =============================================================================
+# Docker Compose file
+# =============================================================================
+# This file tells Docker which apps (called "services") to run, how they talk
+# to each other, and where their files live on your computer ("the host").
+#
+# Each "service" becomes a container: a lightweight, isolated environment with
+# its own filesystem and processes, built from an "image" (a pre-made snapshot).
+#
+# Start everything with:  docker compose up -d
+# Stop everything with:   docker compose down
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# YAML anchors (reusable chunks)
+# ---------------------------------------------------------------------------
+# YAML lets us name a block with "&name" and paste it later with "*name".
+# That way we write shared settings once instead of copying them everywhere.
+#
+# "x-*" keys are Compose "extension fields". Docker ignores them as services;
+# we only use them as named snippets to reuse below.
+# ---------------------------------------------------------------------------
+
+# Shared environment variables for LinuxServer.io images.
+# PUID / PGID = which Linux user/group owns files created in volumes
+#   (should match the user on your host who owns the media folders).
+# TZ = timezone used for logs and schedules.
 x-common-env: &common-env
   PUID: "1000"
   PGID: "1000"
   TZ: Australia/Melbourne
 
-# *arr / downloaders share Gluetun's network namespace (VPN + published ports).
+# Shared networking for apps that must use the VPN.
+# network_mode: service:gluetun means "share Gluetun's network stack":
+#   - all outbound traffic goes through the VPN
+#   - these apps do NOT publish their own ports; Gluetun does that
+# depends_on + condition: service_healthy waits until Gluetun's VPN is up
+# restart: unless-stopped = auto-restart after crashes (but not after a manual stop)
 x-behind-gluetun: &behind-gluetun
   network_mode: service:gluetun
   depends_on:
@@ -12,58 +43,90 @@ x-behind-gluetun: &behind-gluetun
       condition: service_healthy
   restart: unless-stopped
 
+# ---------------------------------------------------------------------------
+# Services (the actual containers)
+# ---------------------------------------------------------------------------
 services:
-  # --- Media ---
+  # --- Media players / library tools (NOT behind the VPN) ---
+  # These use network_mode: host so they share the host machine's network
+  # directly (same localhost, same ports). That lets MediaSage call Plex at
+  # http://localhost:32400 without extra networking glue.
+
+  # Plex: media server that streams your movies/TV/music to apps and browsers.
   plex:
+    # image = which pre-built package to download and run (repo:tag).
     image: lscr.io/linuxserver/plex:1.43.2
+    # Friendly fixed name in `docker ps` (otherwise Docker invents one).
     container_name: plex
+    # Use the host's network (see note above).
     network_mode: host
     environment:
+      # <<: *common-env merges the shared PUID/PGID/TZ values into this block.
       <<: *common-env
+      # Tell the LinuxServer Plex image to stay on the "docker" update channel.
       VERSION: docker
+    # volumes map a folder on your host -> a path inside the container.
+    # Left side is the host path (${PLEX_ROOT} comes from the .env file).
+    # Right side is where the app expects its files inside the container.
+    # Data you put here survives `docker compose down` / image upgrades.
     volumes:
-      - ${PLEX_ROOT}/appdata/plex:/config
-      - ${PLEX_ROOT}/data:/data
+      - ${PLEX_ROOT}/appdata/plex:/config   # Plex settings / database
+      - ${PLEX_ROOT}/data:/data             # your media library
     restart: unless-stopped
 
-  # MediaSage uses user: instead of PUID/PGID (image expectation).
+  # MediaSage: helper that talks to Plex (and AI keys from .secrets).
+  # This image does not use PUID/PGID; it wants an explicit container user.
   mediasage:
     image: ghcr.io/ecwilsonaz/mediasage:0.2.0
     container_name: mediasage
+    # Run as UID 1000 / GID 1000 (same idea as PUID/PGID, different syntax).
     user: "1000:1000"
     network_mode: host
+    # Load extra env vars (API tokens) from a file kept out of git.
     env_file:
       - .secrets/mediasage.env
     environment:
       TZ: Australia/Melbourne
+      # With host networking, "localhost" is the host itself — where Plex listens.
       PLEX_URL: http://localhost:32400
     volumes:
       - ${PLEX_ROOT}/appdata/mediasage:/app/data
     restart: unless-stopped
 
-  # --- VPN ---
-  # All acquisition UIs are published here (shared network_mode: service:gluetun).
+  # --- VPN gateway ---
+  # Gluetun opens a VPN tunnel. Other "*arr" apps piggyback on this container's
+  # network so their traffic exits through the VPN. Their web UIs are also
+  # published here (port mappings below), because those apps do not publish
+  # ports themselves when using network_mode: service:gluetun.
+
   gluetun:
     image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun
     hostname: gluetun
+    # NET_ADMIN lets Gluetun configure networking / VPN routing inside Linux.
     cap_add:
       - NET_ADMIN
+    # /dev/net/tun is the host device used to create a VPN tunnel interface.
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
       VPN_SERVICE_PROVIDER: privado
+    # VPN username/password live in this secret file (not committed to git).
     env_file:
       - .secrets/gluetun.env
+    # "hostPort:containerPort" — open these on your LAN so you can open each UI.
+    # Because *arr apps share Gluetun's network, their ports appear here.
     ports:
-      - 6767:6767 # bazarr
-      - 8686:8686 # lidarr
-      - 9696:9696 # prowlarr
-      - 7878:7878 # radarr
-      - 8989:8989 # sonarr
-      - 8080:8080 # sabnzbd
-      - 8282:8282 # configarr
-    # start_period must cover VPN server failover (first endpoint can be dead for ~60s+).
+      - 6767:6767 # bazarr (subtitles)
+      - 8686:8686 # lidarr (music)
+      - 9696:9696 # prowlarr (indexer manager)
+      - 7878:7878 # radarr (movies)
+      - 8989:8989 # sonarr (TV)
+      - 8080:8080 # sabnzbd (Usenet downloads)
+      - 8282:8282 # configarr (*arr config sync)
+    # healthcheck: Docker periodically runs a test to decide if the VPN is usable.
+    # Other services wait for "healthy" before they start (see x-behind-gluetun).
+    # start_period gives Gluetun time to try VPN servers (first one can be dead).
     healthcheck:
       test: ["CMD-SHELL", "ping -c 1 1.1.1.1 || exit 1"]
       interval: 10s
@@ -72,7 +135,12 @@ services:
       start_period: 120s
     restart: unless-stopped
 
-  # --- Acquisition ---
+  # --- Acquisition (*arr stack + downloader), all behind Gluetun ---
+  # Each service below starts with "<<: *behind-gluetun", which pastes the
+  # shared VPN network_mode, depends_on, and restart settings from above.
+  # Then we only need to add what is unique: image, name, env, volumes.
+
+  # Configarr: keeps *arr apps configured from shared config files.
   configarr:
     <<: *behind-gluetun
     image: ghcr.io/raydak-labs/configarr:1.29.1
@@ -85,6 +153,7 @@ services:
       - ${PLEX_ROOT}/appdata/configarr/cfs:/app/cfs
       - ${PLEX_ROOT}/appdata/configarr/templates:/app/templates
 
+  # Bazarr: finds and downloads subtitles for Sonarr/Radarr media.
   bazarr:
     <<: *behind-gluetun
     image: lscr.io/linuxserver/bazarr:1.6.0
@@ -95,6 +164,7 @@ services:
       - ${PLEX_ROOT}/appdata/bazarr:/config
       - ${PLEX_ROOT}/data:/data
 
+  # Lidarr: manages music (like Sonarr/Radarr, but for albums/artists).
   lidarr:
     <<: *behind-gluetun
     image: lscr.io/linuxserver/lidarr:3.1.0
@@ -105,6 +175,8 @@ services:
       - ${PLEX_ROOT}/appdata/lidarr:/config
       - ${PLEX_ROOT}/data:/data
 
+  # Prowlarr: central indexer manager shared by the other *arr apps.
+  # (Indexers = sites that list what is available to download.)
   prowlarr:
     <<: *behind-gluetun
     image: lscr.io/linuxserver/prowlarr:2.4.0
@@ -114,6 +186,7 @@ services:
     volumes:
       - ${PLEX_ROOT}/appdata/prowlarr:/config
 
+  # Radarr: finds and organizes movies into your library.
   radarr:
     <<: *behind-gluetun
     image: lscr.io/linuxserver/radarr:6.2.1
@@ -124,6 +197,7 @@ services:
       - ${PLEX_ROOT}/appdata/radarr:/config
       - ${PLEX_ROOT}/data:/data
 
+  # Sonarr: finds and organizes TV shows into your library.
   sonarr:
     <<: *behind-gluetun
     image: lscr.io/linuxserver/sonarr:4.0.19
@@ -134,6 +208,7 @@ services:
       - ${PLEX_ROOT}/appdata/sonarr:/config
       - ${PLEX_ROOT}/data:/data
 
+  # SABnzbd: Usenet download client. The *arr apps send download jobs here.
   sabnzbd:
     <<: *behind-gluetun
     image: lscr.io/linuxserver/sabnzbd:5.0.4
