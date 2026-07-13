@@ -192,5 +192,7 @@ services:
       <<: *timezone
       SCRIPT_INTERVAL: "300"
     volumes:
+      # Config at /data; nest-mount downloads so Soularr and Lidarr share
+      # the same path (/data/downloads/...) for import scans.
       - ${PLEX_ROOT}/appdata/soularr:/data
-      - ${PLEX_ROOT}/data:/downloads
+      - ${PLEX_ROOT}/data/downloads:/data/downloads

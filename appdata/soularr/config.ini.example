@@ -2,20 +2,20 @@
 # Lidarr: Settings → General → API Key
 # slskd: Settings → Options → API Keys (administrator role)
 #
-# Paths assume ${PLEX_ROOT}/data is mounted at /downloads, and slskd
-# writes completed files to /data/downloads/complete/slskd.
+# Paths assume downloads are nest-mounted at /data/downloads (see compose),
+# matching Lidarr/slskd so import scans use the same path.
 
 [Lidarr]
 api_key = yourlidarrapikeygoeshere
 host_url = http://localhost:8686
-download_dir = /downloads/downloads/complete/slskd
+download_dir = /data/downloads/complete/slskd
 disable_sync = False
 
 [Slskd]
 api_key = yourslskdapikeygoeshere
 host_url = http://localhost:5030
 url_base = /
-download_dir = /downloads/downloads/complete/slskd
+download_dir = /data/downloads/complete/slskd
 delete_searches = False
 stalled_timeout = 3600
 remote_queue_timeout = 300

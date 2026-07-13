@@ -78,7 +78,7 @@ Soulseek also listens on port `50300`. Privado usually does not forward it, so P
 
 5. Check `docker logs soularr --tail 50`, then add a wanted album in Lidarr to test.
 
-Soularr and Lidarr talk over `localhost` (shared Gluetun network). Downloads land in `data/downloads/complete/slskd`; Lidarr imports into `data/media/music`.
+Soularr and Lidarr talk over `localhost` (shared Gluetun network). Both see completed downloads at `/data/downloads/complete/slskd`; Lidarr imports into `/data/media/music`.
 
 ## Updates
 
