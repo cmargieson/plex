@@ -1,8 +1,8 @@
-# Copy to ${PLEX_ROOT}/appdata/soularr/config.ini and fill in API keys.
-# Lidarr: Settings > General > API Key
-# slskd: Settings > Options > API Keys (create one with administrator role)
+# Copy to ${PLEX_ROOT}/appdata/soularr/config.ini and add API keys.
+# Lidarr: Settings → General → API Key
+# slskd: Settings → Options → API Keys (administrator role)
 #
-# Paths assume Soularr mounts ${PLEX_ROOT}/data at /downloads and slskd
+# Paths assume ${PLEX_ROOT}/data is mounted at /downloads, and slskd
 # writes completed files to /data/downloads/complete/slskd.
 
 [Lidarr]
