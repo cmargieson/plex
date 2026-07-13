@@ -130,6 +130,9 @@ services:
       - 8989:8989 # sonarr (TV)
       - 8080:8080 # sabnzbd (Usenet downloads)
       - 8282:8282 # configarr (*arr config sync)
+      - 5030:5030 # slskd (Soulseek web UI)
+      - 5031:5031 # slskd HTTPS (self-signed)
+      - 50300:50300 # Soulseek listen port (P2P)
     # healthcheck: Docker periodically runs a test to decide if the VPN is usable.
     # Other services wait for "healthy" before they start (see x-behind-gluetun).
     # start_period gives Gluetun time to try VPN servers (first one can be dead).
@@ -224,3 +227,45 @@ services:
     volumes:
       - ${PLEX_ROOT}/appdata/sabnzbd:/config
       - ${PLEX_ROOT}/data:/data
+
+  # slskd: Soulseek client (downloads + shares your music library for uploads).
+  # Web UI on :5030. Soulseek credentials come from .secrets/slskd.env.
+  slskd:
+    <<: *behind-gluetun
+    image: slskd/slskd:0.25.1
+    container_name: slskd
+    env_file:
+      - .secrets/slskd.env
+    environment:
+      <<: *common-env
+      SLSKD_REMOTE_CONFIGURATION: "true"
+      SLSKD_REMOTE_FILE_MANAGEMENT: "true"
+      SLSKD_DOWNLOADS_DIR: /data/downloads/complete/slskd
+      SLSKD_INCOMPLETE_DIR: /data/downloads/incomplete/slskd
+      SLSKD_SHARED_DIR: /data/media/music
+      SLSKD_SLSK_LISTEN_PORT: "50300"
+    volumes:
+      - ${PLEX_ROOT}/appdata/slskd:/app
+      - ${PLEX_ROOT}/data:/data
+
+  # Soularr: bridges Lidarr "wanted" albums to slskd downloads, then triggers import.
+  # Config lives at ${PLEX_ROOT}/appdata/soularr/config.ini (see config.ini.example).
+  # /downloads maps to the host data root so download_dir matches slskd's output path.
+  soularr:
+    <<: *behind-gluetun
+    image: mrusse08/soularr:v1.1.0
+    container_name: soularr
+    user: "1000:1000"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+      lidarr:
+        condition: service_started
+      slskd:
+        condition: service_started
+    environment:
+      <<: *timezone
+      SCRIPT_INTERVAL: "300"
+    volumes:
+      - ${PLEX_ROOT}/appdata/soularr:/data
+      - ${PLEX_ROOT}/data:/downloads
