@@ -1,5 +1,5 @@
 # Plex + *arr stack. Start: docker compose up -d
-# VPN services share Gluetun's network; Plex/MediaSage use host networking.
+# VPN services share Gluetun's network; Plex uses host networking.
 
 # Reusable snippets (Compose ignores x-* keys as services)
 x-timezone: &timezone
@@ -32,21 +32,6 @@ services:
     volumes:
       - ${PLEX_ROOT}/appdata/plex:/config
       - ${PLEX_ROOT}/data:/data
-    restart: unless-stopped
-
-  # AI helper for Plex; needs host network for localhost:32400
-  mediasage:
-    image: ghcr.io/ecwilsonaz/mediasage:0.2.0
-    container_name: mediasage
-    user: "1000:1000"
-    network_mode: host
-    env_file:
-      - .secrets/mediasage.env
-    environment:
-      <<: *timezone
-      PLEX_URL: http://localhost:32400
-    volumes:
-      - ${PLEX_ROOT}/appdata/mediasage:/app/data
     restart: unless-stopped
 
   # --- VPN gateway (UIs for VPN services are published here) ---
