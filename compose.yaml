@@ -45,9 +45,20 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
+      <<: *timezone
       VPN_SERVICE_PROVIDER: privado
+      # Startup healthcheck is a 6s TCP+TLS dial. Hostnames need DNS first;
+      # DoT (853) is often blocked/slow on Privado, so the check times out
+      # and Gluetun reconnects in a loop. Dial IPs; use DNS-over-HTTPS on 443.
+      HEALTH_TARGET_ADDRESSES: "1.1.1.1:443,8.8.8.8:443"
+      DNS_UPSTREAM_RESOLVER_TYPE: doh
+      DNS_UPSTREAM_RESOLVERS: cloudflare
+      # Privado country metadata is incomplete; these are valid filters.
+      SERVER_COUNTRIES: Netherlands,United States
     env_file:
       - .secrets/gluetun.env
+    volumes:
+      - ${PLEX_ROOT}/appdata/gluetun:/gluetun
     ports:
       - 6767:6767 # bazarr
       - 8686:8686 # lidarr
@@ -60,7 +71,7 @@ services:
       - 5031:5031 # slskd HTTPS
       - 50300:50300 # Soulseek P2P
     healthcheck:
-      test: ["CMD-SHELL", "ping -c 1 1.1.1.1 || exit 1"]
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 6
