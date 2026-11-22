@@ -19,6 +19,10 @@ x-behind-gluetun: &behind-gluetun
       condition: service_healthy
   restart: unless-stopped
 
+# Shared data volume mount used by most services
+x-volume-data: &volume-data
+  "${PLEX_ROOT}/data:/data"
+
 services:
   # --- Host network (reach each other on localhost) ---
 
@@ -31,7 +35,7 @@ services:
       VERSION: docker
     volumes:
       - ${PLEX_ROOT}/appdata/plex:/config
-      - ${PLEX_ROOT}/data:/data
+      - *volume-data
     restart: unless-stopped
 
   # --- VPN gateway (UIs for VPN services are published here) ---
@@ -100,7 +104,7 @@ services:
       <<: *common-env
     volumes:
       - ${PLEX_ROOT}/appdata/bazarr:/config
-      - ${PLEX_ROOT}/data:/data
+      - *volume-data
 
   lidarr:
     <<: *behind-gluetun
@@ -110,7 +114,7 @@ services:
       <<: *common-env
     volumes:
       - ${PLEX_ROOT}/appdata/lidarr:/config
-      - ${PLEX_ROOT}/data:/data
+      - *volume-data
 
   prowlarr:
     <<: *behind-gluetun
@@ -129,7 +133,7 @@ services:
       <<: *common-env
     volumes:
       - ${PLEX_ROOT}/appdata/radarr:/config
-      - ${PLEX_ROOT}/data:/data
+      - *volume-data
 
   sonarr:
     <<: *behind-gluetun
@@ -139,7 +143,7 @@ services:
       <<: *common-env
     volumes:
       - ${PLEX_ROOT}/appdata/sonarr:/config
-      - ${PLEX_ROOT}/data:/data
+      - *volume-data
 
   sabnzbd:
     <<: *behind-gluetun
@@ -149,7 +153,7 @@ services:
       <<: *common-env
     volumes:
       - ${PLEX_ROOT}/appdata/sabnzbd:/config
-      - ${PLEX_ROOT}/data:/data
+      - *volume-data
 
   # Soulseek client; credentials in .secrets/slskd.env
   slskd:
@@ -168,7 +172,7 @@ services:
       SLSKD_SLSK_LISTEN_PORT: "50300"
     volumes:
       - ${PLEX_ROOT}/appdata/slskd:/app
-      - ${PLEX_ROOT}/data:/data
+      - *volume-data
 
   # Lidarr wanted → slskd download → Lidarr import
   # Config: ${PLEX_ROOT}/appdata/soularr/config.ini
